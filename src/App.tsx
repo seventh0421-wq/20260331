@@ -397,6 +397,26 @@ export default function App() {
   const [wrongQuestions, setWrongQuestions] = useState<any[]>([]);
   const [hasTakenDamageInCurrentDungeon, setHasTakenDamageInCurrentDungeon] = useState(false);
   const [doubleMedalsNextRun, setDoubleMedalsNextRun] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  // Check for first-time user
+  useEffect(() => {
+    const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
+    if (!hasSeenTutorial) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const completeTutorial = () => {
+    setShowTutorial(false);
+    localStorage.setItem('hasSeenTutorial', 'true');
+  };
+
+  const restartTutorial = () => {
+    setTutorialStep(0);
+    setShowTutorial(true);
+  };
 
   // Presence Sync
   useEffect(() => {
@@ -557,6 +577,7 @@ export default function App() {
             key="login" 
             onLogin={handleLogin} 
             onAdminClick={() => setGameState('admin_login')}
+            onShowTutorial={restartTutorial}
           />
         )}
         {gameState === 'admin_login' && (
@@ -592,6 +613,7 @@ export default function App() {
               setPlayerData(prev => ({ ...prev, selectedJob: jobId }));
             }}
             doubleMedalsActive={doubleMedalsNextRun}
+            onShowTutorial={restartTutorial}
           />
         )}
         {gameState === 'playing' && (
@@ -637,11 +659,132 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Onboarding Tutorial */}
+      <AnimatePresence>
+        {showTutorial && (
+          <Tutorial 
+            step={tutorialStep} 
+            gameState={gameState}
+            onNext={() => setTutorialStep(prev => prev + 1)}
+            onSkip={completeTutorial}
+            onComplete={completeTutorial}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function LoginScreen({ onLogin, onAdminClick }: { onLogin: (data: any) => void, onAdminClick: () => void, key?: string }) {
+function Tutorial({ step, gameState, onNext, onSkip, onComplete }: { step: number, gameState: string, onNext: () => void, onSkip: () => void, onComplete: () => void }) {
+  const steps = [
+    {
+      id: 'welcome',
+      title: '歡迎來到科學公會！',
+      content: '這是一個結合科學知識與冒險的遊戲。準備好開始你的科學之旅了嗎？',
+      icon: <Sparkles className="w-12 h-12 text-yellow-400" />,
+      targetState: 'login'
+    },
+    {
+      id: 'jobs',
+      title: '選擇你的職業',
+      content: '每個職業都有獨特的技能！守護騎士可以抵擋傷害，魔法精靈可以加倍輸出，療癒師可以恢復體力，幻影貓貓可以延長時間。',
+      icon: <Users className="w-12 h-12 text-blue-400" />,
+      targetState: 'login'
+    },
+    {
+      id: 'login_info',
+      title: '登入冒險',
+      content: '輸入你的暱稱。如果你是跟同學一起玩，請輸入相同的小隊代碼；如果是自己玩，可以開啟「單人修行模式」。',
+      icon: <User className="w-12 h-12 text-pink-400" />,
+      targetState: 'login'
+    },
+    {
+      id: 'world_map',
+      title: '世界地圖',
+      content: '這裡是你的基地。點擊副本圖示開始挑戰，或者點擊右上角的商店購買加成道具。',
+      icon: <Globe className="w-12 h-12 text-green-400" />,
+      targetState: 'map'
+    },
+    {
+      id: 'battle_hp',
+      title: '戰鬥：體力與傷害',
+      content: '戰鬥中，上方會顯示小隊的體力（愛心）。答錯問題或超時會扣除體力，體力歸零就失敗了！',
+      icon: <Heart className="w-12 h-12 text-red-500" />,
+      targetState: 'playing'
+    },
+    {
+      id: 'battle_timer',
+      title: '戰鬥：計時器',
+      content: '注意計時器！在時間內回答問題才能對 Boss 造成傷害。有些職業技能可以在關鍵時刻幫到你。',
+      icon: <Timer className="w-12 h-12 text-blue-500" />,
+      targetState: 'playing'
+    },
+    {
+      id: 'battle_teamwork',
+      title: '戰鬥：團隊合作',
+      content: '在小隊模式中，全隊隊員都必須選擇相同的答案才能送出。溝通與共識是通關的關鍵！',
+      icon: <MessageCircle className="w-12 h-12 text-purple-500" />,
+      targetState: 'playing'
+    }
+  ];
+
+  const currentStep = steps[step] || steps[steps.length - 1];
+  const isLastStep = step >= steps.length - 1;
+
+  // Auto-skip steps that don't match the current game state if we're moving forward
+  // But for a simple guided tour, we'll just show them all in order or filter them.
+  // Let's just show them all in a centered modal for now.
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="bg-white rounded-[3rem] max-w-md w-full p-10 relative shadow-2xl border-4 border-white"
+      >
+        <div className="flex flex-col items-center text-center space-y-6">
+          <div className="p-6 bg-gray-50 rounded-[2rem] shadow-inner">
+            {currentStep.icon}
+          </div>
+          
+          <div>
+            <h2 className="text-3xl font-black text-gray-800 mb-2">{currentStep.title}</h2>
+            <p className="text-gray-400 font-bold tracking-widest uppercase text-xs">新手教學 ({step + 1}/{steps.length})</p>
+          </div>
+
+          <p className="text-gray-600 font-bold text-lg leading-relaxed">
+            {currentStep.content}
+          </p>
+
+          <div className="flex flex-col w-full gap-3">
+            <button
+              onClick={isLastStep ? onComplete : onNext}
+              className="w-full py-4 rounded-2xl text-xl font-black text-white bg-gradient-to-r from-blue-500 to-indigo-600 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              {isLastStep ? '開始冒險！' : '下一步'}
+            </button>
+            {!isLastStep && (
+              <button
+                onClick={onSkip}
+                className="w-full py-2 text-gray-400 font-bold hover:text-gray-600 transition-colors"
+              >
+                跳過教學
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function LoginScreen({ onLogin, onAdminClick, onShowTutorial }: { onLogin: (data: any) => void, onAdminClick: () => void, onShowTutorial: () => void, key?: string }) {
   const [teamCode, setTeamCode] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [selectedJobId, setSelectedJobId] = useState('');
@@ -673,6 +816,15 @@ function LoginScreen({ onLogin, onAdminClick }: { onLogin: (data: any) => void, 
     >
       <div className="max-w-2xl w-full bg-white/90 backdrop-blur-md border-4 border-white rounded-[3rem] shadow-2xl p-8 md:p-12 relative">
         
+        {/* Help Button */}
+        <button 
+          onClick={onShowTutorial}
+          className="absolute top-8 right-8 p-3 bg-blue-50 text-blue-500 rounded-2xl hover:bg-blue-100 transition-colors shadow-sm z-10 flex items-center gap-2 font-black text-sm"
+        >
+          <Book className="w-5 h-5" />
+          新手教學
+        </button>
+
         {/* 裝飾星星 */}
         <Star className="absolute top-8 left-8 text-yellow-400 w-6 h-6 animate-pulse" />
         <Sparkles className="absolute bottom-12 right-12 text-pink-300 w-8 h-8 animate-bounce" />
@@ -1066,7 +1218,7 @@ function AchievementModal({ isOpen, onClose, achievements, unlockedIds }: { isOp
   );
 }
 
-function WorldMap({ clearedDungeons, onSelectDungeon, onMerchantSuccess, medals, onSpendMedals, teamCode, playerName, achievements, unlockedAchievements, onJobChange, doubleMedalsActive }: { clearedDungeons: string[], onSelectDungeon: (id: string) => void, onMerchantSuccess: () => void, medals: number, onSpendMedals: (amount: number, hearts: number, type?: 'heart' | 'job_change' | 'double_medals') => void, teamCode: string, playerName: string, achievements: Achievement[], unlockedAchievements: string[], onJobChange: (jobId: string) => void, doubleMedalsActive?: boolean, key?: string }) {
+function WorldMap({ clearedDungeons, onSelectDungeon, onMerchantSuccess, medals, onSpendMedals, teamCode, playerName, achievements, unlockedAchievements, onJobChange, doubleMedalsActive, onShowTutorial }: { clearedDungeons: string[], onSelectDungeon: (id: string) => void, onMerchantSuccess: () => void, medals: number, onSpendMedals: (amount: number, hearts: number, type?: 'heart' | 'job_change' | 'double_medals') => void, teamCode: string, playerName: string, achievements: Achievement[], unlockedAchievements: string[], onJobChange: (jobId: string) => void, doubleMedalsActive?: boolean, onShowTutorial: () => void, key?: string }) {
   const [showMerchant, setShowMerchant] = useState(false);
   const [showBestiary, setShowBestiary] = useState(false);
   const [showShop, setShowShop] = useState(false);
@@ -1207,6 +1359,19 @@ function WorldMap({ clearedDungeons, onSelectDungeon, onMerchantSuccess, medals,
 
       {/* Bestiary Button */}
       <div className="absolute bottom-8 right-8 z-30 flex flex-col gap-4 items-end">
+        {/* Help Button */}
+        <div className="relative group">
+          <button 
+            onClick={onShowTutorial}
+            className="bg-white p-4 rounded-full shadow-lg border-2 border-blue-400/20 text-blue-600 hover:scale-110 transition-all active:scale-95"
+          >
+            <Book className="w-8 h-8" />
+          </button>
+          <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            新手教學
+          </div>
+        </div>
+
         {/* Achievement Button */}
         <div className="relative group">
           <button 
@@ -1355,9 +1520,13 @@ function WorldMap({ clearedDungeons, onSelectDungeon, onMerchantSuccess, medals,
 function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onWrongAnswer }: { playerData: any, dungeonId: string, bonusHearts: number, isSoloMode: boolean, onEnd: (res: 'victory' | 'gameover', details?: { noDamage: boolean }) => void, onWrongAnswer?: (q: any) => void, key?: string }) {
   const QUESTION_TIME_LIMIT = 30;
   const currentInitialBossHp = isSoloMode ? 1000 : INITIAL_BOSS_HP;
-  const [bossHp, setBossHp] = useState(currentInitialBossHp);
+  const [bossHp, setBossHp] = useState(isSoloMode ? 1000 : 3000);
   const [teamHp, setTeamHp] = useState(INITIAL_TEAM_HP + bonusHearts);
   const [hasTakenDamage, setHasTakenDamage] = useState(false);
+  const [hpInitialized, setHpInitialized] = useState(false);
+  const [isTeamReady, setIsTeamReady] = useState(isSoloMode);
+  const [gameEnded, setGameEnded] = useState(false);
+  const [isVictory, setIsVictory] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong' | 'timeout', explanation?: string } | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -1383,7 +1552,7 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
 
   // Timer logic
   useEffect(() => {
-    if (feedback || isAnimating || waitingForOthers || showSkillConfirm) return;
+    if (!isTeamReady || feedback || isAnimating || waitingForOthers || showSkillConfirm || gameEnded || isVictory) return;
 
     if (timeLeft <= 0) {
       processAnswer(-1, true); // Timeout
@@ -1438,8 +1607,15 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
       const playersRef = ref(rtdb, `rooms/${playerData.teamCode}/players`);
       unsubscribePlayers = onValue(playersRef, (snapshot) => {
         const data = snapshot.val() || {};
-        const activeCount = Object.values(data).filter((p: any) => Date.now() - p.lastUpdate < 60000).length;
+        const activePlayers = Object.values(data).filter((p: any) => Date.now() - p.lastUpdate < 60000);
+        const activeCount = activePlayers.length;
+        const playingCount = activePlayers.filter((p: any) => p.status === 'playing').length;
+        
         setPlayerCount(activeCount || 1);
+        // Team is ready when everyone in the room has status 'playing'
+        if (activeCount > 0 && playingCount === activeCount) {
+          setIsTeamReady(true);
+        }
       });
     }
 
@@ -1450,8 +1626,19 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
         const data = snapshot.val();
         if (data && data.status === 'playing') {
           // Sync state from other players
-          if (data.bossHp !== undefined && data.bossHp !== bossHp) setBossHp(data.bossHp);
-          if (data.teamHp !== undefined && data.teamHp !== teamHp) setTeamHp(data.teamHp);
+          if (data.bossHp !== undefined && data.bossHp !== bossHp) {
+            setBossHp(data.bossHp);
+            if (!hpInitialized) setHpInitialized(true);
+          }
+          if (data.teamHp !== undefined && data.teamHp !== teamHp) {
+            setTeamHp(data.teamHp);
+            if (data.teamHp < (INITIAL_TEAM_HP + bonusHearts)) {
+              setHasTakenDamage(true);
+            }
+          }
+          if (data.victory === true && !isVictory) {
+            setIsVictory(true);
+          }
           if (data.currentIdx !== undefined && data.currentIdx !== currentIdx) {
             setCurrentIdx(data.currentIdx);
             setFeedback(null);
@@ -1482,9 +1669,39 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
     update(roomRef, {
       bossHp,
       teamHp,
-      currentIdx
+      currentIdx,
+      hasTakenDamage,
+      victory: isVictory
     });
-  }, [bossHp, teamHp, currentIdx]);
+  }, [bossHp, teamHp, currentIdx, hasTakenDamage, isVictory]);
+
+  // Initialize Boss HP based on player count
+  useEffect(() => {
+    if (!hpInitialized && isTeamReady) {
+      const roomRef = ref(rtdb, `rooms/${playerData.teamCode}`);
+      onValue(roomRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.bossHp !== undefined) {
+          setBossHp(data.bossHp);
+          setHpInitialized(true);
+        } else {
+          const initialHp = isSoloMode ? 1000 : playerCount * 1000;
+          setBossHp(initialHp);
+          setHpInitialized(true);
+          update(roomRef, { bossHp: initialHp });
+        }
+      }, { onlyOnce: true });
+    }
+  }, [isTeamReady, playerCount, isSoloMode, hpInitialized, playerData.teamCode]);
+
+  // Check for victory (sync across all players)
+  useEffect(() => {
+    if ((bossHp <= 0 && hpInitialized || isVictory) && !gameEnded) {
+      setGameEnded(true);
+      if (bossHp <= 0 && !isVictory) setIsVictory(true);
+      onEnd('victory', { noDamage: !hasTakenDamage });
+    }
+  }, [bossHp, hpInitialized, gameEnded, hasTakenDamage, onEnd, isVictory]);
 
   // Check for unanimous vote
   useEffect(() => {
@@ -1598,6 +1815,12 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
         setBossHp(newBossHp);
         setIsAnimating(false);
         
+        if (newBossHp <= 0) {
+          const roomRef = ref(rtdb, `rooms/${playerData.teamCode}`);
+          update(roomRef, { victory: true, bossHp: 0 });
+          setIsVictory(true);
+        }
+        
         setTimeout(() => {
           setFeedback(null);
           setUserInput('');
@@ -1679,6 +1902,28 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
         backgroundRepeat: 'no-repeat'
       }}
     >
+      {/* Waiting for Teammates Overlay */}
+      {!isTeamReady && !isSoloMode && (
+        <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white p-8 rounded-[2rem] shadow-2xl text-center border-4 border-blue-100 mx-4"
+          >
+            <div className="relative w-20 h-20 mx-auto mb-6">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full"
+              />
+              <Users className="w-10 h-10 text-blue-500 absolute inset-0 m-auto" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-800 mb-2">等待隊友中...</h3>
+            <p className="text-gray-500 font-bold">全員進入副本後將開始戰鬥！</p>
+          </motion.div>
+        </div>
+      )}
+
       {/* Subtle overlay for better UI contrast */}
       <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] -z-10" />
 
