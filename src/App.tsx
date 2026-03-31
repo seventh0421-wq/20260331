@@ -950,43 +950,38 @@ function TeammatesList({ teamCode, currentPlayerName }: { teamCode: string, curr
 
   return (
     <div className="flex flex-col items-center gap-2 mt-4">
-      <div className="flex -space-x-3 overflow-hidden">
+      <div className="flex flex-wrap justify-center gap-2">
         {players.map((p) => {
           const job = JOBS.find(j => j.id === p.job);
           return (
             <motion.div 
               key={p.name}
-              initial={{ scale: 0, x: 20 }}
-              animate={{ scale: 1, x: 0 }}
-              className={`inline-block h-10 w-10 rounded-full ring-4 ring-white ${job?.bgColor || 'bg-gray-100'} flex items-center justify-center shadow-lg relative group`}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`px-3 py-1 rounded-full border-2 ${job?.borderColor || 'border-gray-200'} ${job?.bgColor || 'bg-white'} shadow-sm flex items-center gap-2 relative`}
             >
-              <div className="w-6 h-6 flex items-center justify-center">
-                {job?.icon}
-              </div>
+              <span className={`text-xs font-black ${job?.accentColor || 'text-gray-600'}`}>
+                {p.name}
+              </span>
               {p.status === 'playing' && (
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                <span className="flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                 </span>
               )}
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                {p.name} ({job?.name})
-              </div>
             </motion.div>
           );
         })}
       </div>
       <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] bg-white/50 px-4 py-1 rounded-full border border-gray-100">
         <Users className="w-3 h-3" />
-        <span>小隊成員：{players.map(p => p.name).join('、')}</span>
+        小隊冒險中
       </div>
     </div>
   );
 }
 
-// --- BossBattle Component ---
-
+// --- AchievementModal Component ---
 function AchievementModal({ isOpen, onClose, achievements, unlockedIds }: { isOpen: boolean, onClose: () => void, achievements: Achievement[], unlockedIds: string[] }) {
   return (
     <AnimatePresence>
@@ -1367,6 +1362,7 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
   const [feedback, setFeedback] = useState<{ type: 'correct' | 'wrong' | 'timeout', explanation?: string } | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [votes, setVotes] = useState<Record<string, number>>({});
+  const [playerCount, setPlayerCount] = useState(1);
   const [waitingForOthers, setWaitingForOthers] = useState(false);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
   const [skillUsed, setSkillUsed] = useState(false);
@@ -1432,10 +1428,18 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
 
     // Listen for votes if not solo
     let unsubscribeVotes: any;
+    let unsubscribePlayers: any;
     if (!isSoloMode) {
       unsubscribeVotes = onValue(votesRef, (snapshot) => {
         const data = snapshot.val() || {};
         setVotes(data);
+      });
+
+      const playersRef = ref(rtdb, `rooms/${playerData.teamCode}/players`);
+      unsubscribePlayers = onValue(playersRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        const activeCount = Object.values(data).filter((p: any) => Date.now() - p.lastUpdate < 60000).length;
+        setPlayerCount(activeCount || 1);
       });
     }
 
@@ -1454,6 +1458,7 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
             setUserInput('');
             setTimeLeft(QUESTION_TIME_LIMIT);
             setSkillUsed(false);
+            setWaitingForOthers(false);
           }
         }
       });
@@ -1464,6 +1469,7 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
 
     return () => {
       if (unsubscribeVotes) unsubscribeVotes();
+      if (unsubscribePlayers) unsubscribePlayers();
       if (unsubscribeRoom) unsubscribeRoom();
       update(roomRef, { status: 'finished' });
     };
@@ -1485,11 +1491,9 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
     if (isSoloMode || !waitingForOthers) return;
 
     const voteValues = Object.values(votes);
-    // In a real app, we'd know how many players are in the room. 
-    // For now, let's assume we wait for at least 1 vote (the current player's)
-    // or if we have a way to track player count.
-    // Let's simplify: if we are waiting, and everyone who voted chose the same answer.
-    if (voteValues.length > 0) {
+    
+    // Wait for ALL players to vote
+    if (voteValues.length >= playerCount && playerCount > 0) {
       const allSame = voteValues.every(v => v === voteValues[0]);
       if (allSame) {
         processAnswer(voteValues[0] as number);
@@ -1497,9 +1501,20 @@ function BossBattle({ playerData, dungeonId, bonusHearts, isSoloMode, onEnd, onW
         const votesRef = ref(rtdb, `rooms/${playerData.teamCode}/votes`);
         set(votesRef, null);
         setWaitingForOthers(false);
+      } else {
+        // Disagreement: show feedback and reset votes to allow re-voting
+        setFeedback({ type: 'wrong', explanation: '小隊意見不一致！請討論後再重新選擇。' });
+        const votesRef = ref(rtdb, `rooms/${playerData.teamCode}/votes`);
+        set(votesRef, null);
+        setWaitingForOthers(false);
+        
+        // Clear feedback after a short delay
+        setTimeout(() => {
+          setFeedback(null);
+        }, 2000);
       }
     }
-  }, [votes, waitingForOthers, isSoloMode]);
+  }, [votes, waitingForOthers, isSoloMode, playerCount]);
 
   const handleAnswer = (index: number) => {
     if (feedback || isAnimating || waitingForOthers) return;
