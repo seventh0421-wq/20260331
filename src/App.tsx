@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Heart, Sword, Shield, Timer, Trophy, Skull, RefreshCw, ChevronRight, User, Sparkles, Wand2, Leaf, Cat, Star, MessageCircle, LayoutDashboard, Users, Activity, Zap, Lock, Book, X, Globe, ShieldCheck } from 'lucide-react';
+import { Heart, Sword, Shield, Timer, Trophy, Skull, RefreshCw, ChevronRight, User, Sparkles, Wand2, Leaf, Cat, Star, MessageCircle, LayoutDashboard, Users, Activity, Zap, Lock, Book, X, Globe, ShieldCheck, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { rtdb } from './firebase';
-import { ref, onValue, set, update, onDisconnect } from 'firebase/database';
+import { ref, onValue, set, update, onDisconnect, remove } from 'firebase/database';
 
 // --- Types & Data ---
 
@@ -995,18 +995,19 @@ function AchievementModal({ isOpen, onClose, achievements, unlockedIds }: { isOp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-6"
+          className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4 md:p-8"
         >
           <motion.div 
             initial={{ y: 50, scale: 0.9 }}
             animate={{ y: 0, scale: 1 }}
-            className="bg-white max-w-2xl w-full rounded-[3rem] p-10 shadow-2xl border-8 border-yellow-100 relative max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="bg-white max-w-4xl w-full rounded-[3rem] p-8 md:p-12 shadow-2xl border-8 border-yellow-100 relative max-h-[90vh] overflow-y-auto custom-scrollbar"
           >
             <button 
               onClick={onClose}
-              className="absolute top-6 right-6 text-gray-300 hover:text-gray-500 transition-colors"
+              className="absolute top-6 right-6 p-3 bg-gray-100 text-gray-500 rounded-full hover:scale-110 transition-transform shadow-sm z-10"
+              aria-label="Close"
             >
-              <RefreshCw className="w-6 h-6 rotate-45" />
+              <X className="w-8 h-8" />
             </button>
 
             <div className="text-center mb-10">
@@ -1052,10 +1053,16 @@ function AchievementModal({ isOpen, onClose, achievements, unlockedIds }: { isOp
               })}
             </div>
 
-            <div className="mt-10 text-center">
+            <div className="mt-10 flex flex-col items-center gap-4">
               <p className="text-sm font-bold text-gray-400">
                 目前進度：{unlockedIds.length} / {achievements.length}
               </p>
+              <button
+                onClick={onClose}
+                className="px-12 py-4 bg-gray-800 text-white text-xl font-black rounded-full shadow-lg hover:bg-gray-700 transition-all active:scale-95"
+              >
+                關閉視窗
+              </button>
             </div>
           </motion.div>
         </motion.div>
@@ -1284,18 +1291,18 @@ function WorldMap({ clearedDungeons, onSelectDungeon, onMerchantSuccess, medals,
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-6"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 md:p-8"
           >
             <motion.div 
               initial={{ y: 50, scale: 0.9 }}
               animate={{ y: 0, scale: 1 }}
-              className="bg-white max-w-lg w-full rounded-[3rem] p-10 shadow-2xl border-8 border-orange-100 relative"
+              className="bg-white max-w-2xl w-full rounded-[3rem] p-8 md:p-12 shadow-2xl border-8 border-orange-100 relative"
             >
               <button 
                 onClick={() => { setShowMerchant(false); setMerchantFeedback(''); setMerchantSuccess(false); }}
-                className="absolute top-6 right-6 text-gray-300 hover:text-gray-500 transition-colors"
+                className="absolute top-6 right-6 p-3 bg-gray-100 text-gray-500 rounded-full hover:scale-110 transition-transform shadow-sm z-10"
               >
-                <RefreshCw className="w-6 h-6 rotate-45" />
+                <X className="w-8 h-8" />
               </button>
 
               <div className="text-center mb-8">
@@ -2160,9 +2167,25 @@ function AdminLogin({ onUnlock, onBack }: { onUnlock: () => void, onBack: () => 
 
 // --- Teacher Dashboard Component ---
 
-function TeacherDashboard({ key }: { key?: string } = {}) {
+function TeacherDashboard() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const handleDeleteRoom = async (roomId: string) => {
+    try {
+      setDeletingId(roomId);
+      const roomRef = ref(rtdb, `rooms/${roomId}`);
+      await remove(roomRef);
+      setConfirmingId(null);
+    } catch (error) {
+      console.error("Delete failed:", error);
+      // We'll show an error state instead of alert
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const roomsRef = ref(rtdb, 'rooms');
@@ -2243,8 +2266,35 @@ function TeacherDashboard({ key }: { key?: string } = {}) {
                       {room.status === 'playing' ? '冒險中' : '已斷線'}
                     </span>
                   </div>
-                  <div className={`p-3 rounded-2xl bg-slate-700/50 ${jobInfo?.accentColor}`}>
-                    {jobInfo?.icon}
+                  <div className="flex items-center gap-3">
+                    {confirmingId === room.id ? (
+                      <div className="flex items-center gap-2 bg-red-500/20 p-1 rounded-xl border border-red-500/30">
+                        <button
+                          onClick={() => handleDeleteRoom(room.id)}
+                          disabled={deletingId === room.id}
+                          className="px-3 py-1 bg-red-500 text-white text-[10px] font-black rounded-lg hover:bg-red-600 transition-all"
+                        >
+                          {deletingId === room.id ? '刪除中...' : '確定'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmingId(null)}
+                          className="px-3 py-1 bg-slate-700 text-slate-300 text-[10px] font-black rounded-lg hover:bg-slate-600 transition-all"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmingId(room.id)}
+                        className="p-2 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                        title="刪除此小隊資料"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    )}
+                    <div className={`p-3 rounded-2xl bg-slate-700/50 ${jobInfo?.accentColor}`}>
+                      {jobInfo?.icon}
+                    </div>
                   </div>
                 </div>
 
@@ -2564,9 +2614,9 @@ function BestiaryModal({ isOpen, onClose, clearedDungeons }: { isOpen: boolean, 
             {/* Close Button */}
             <button 
               onClick={onClose}
-              className="absolute top-6 right-6 p-2 bg-[#8b5e3c] text-white rounded-full hover:scale-110 transition-transform shadow-lg z-10"
+              className="absolute top-6 right-6 p-3 bg-[#8b5e3c] text-white rounded-full hover:scale-110 transition-transform shadow-lg z-10"
             >
-              <X className="w-6 h-6" />
+              <X className="w-8 h-8" />
             </button>
 
             <header className="text-center mb-12 border-b-4 border-[#8b5e3c]/20 pb-8">
@@ -2653,8 +2703,14 @@ function JobSelectionModal({ isOpen, onClose, onSelect }: { isOpen: boolean, onC
             initial={{ scale: 0.9, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 20 }}
-            className="bg-white rounded-[3rem] max-w-2xl w-full p-10 relative shadow-2xl overflow-hidden"
+            className="bg-white rounded-[3rem] max-w-3xl w-full p-8 md:p-12 relative shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
           >
+            <button 
+              onClick={onClose}
+              className="absolute top-6 right-6 p-3 bg-gray-100 text-gray-500 rounded-full hover:scale-110 transition-transform shadow-sm z-10"
+            >
+              <X className="w-8 h-8" />
+            </button>
             <header className="text-center mb-10">
               <h2 className="text-3xl font-black text-gray-800 mb-2">重新選擇你的職業</h2>
               <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Choose Your New Destiny</p>
@@ -2844,7 +2900,7 @@ function ShopModal({ isOpen, onClose, medals, onPurchase }: { isOpen: boolean, o
             initial={{ scale: 0.9, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 20 }}
-            className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl border-8 border-yellow-100 relative p-8 md:p-12"
+            className="bg-white w-full max-w-3xl rounded-[3rem] shadow-2xl border-8 border-yellow-100 relative p-8 md:p-12 max-h-[90vh] overflow-y-auto"
           >
             {/* Success Notification */}
             <AnimatePresence>
@@ -2864,9 +2920,9 @@ function ShopModal({ isOpen, onClose, medals, onPurchase }: { isOpen: boolean, o
             {/* Close Button */}
             <button 
               onClick={onClose}
-              className="absolute top-6 right-6 p-2 bg-gray-100 text-gray-500 rounded-full hover:scale-110 transition-transform shadow-sm z-10"
+              className="absolute top-6 right-6 p-3 bg-gray-100 text-gray-500 rounded-full hover:scale-110 transition-transform shadow-sm z-10"
             >
-              <X className="w-6 h-6" />
+              <X className="w-8 h-8" />
             </button>
 
             <header className="text-center mb-10">
@@ -2923,10 +2979,16 @@ function ShopModal({ isOpen, onClose, medals, onPurchase }: { isOpen: boolean, o
               })}
             </div>
 
-            <footer className="mt-10 text-center">
+            <footer className="mt-10 flex flex-col items-center gap-6">
               <p className="text-gray-400 text-xs font-bold italic">
                 「勳章是勇氣的證明，也是通往勝利的階梯。」
               </p>
+              <button
+                onClick={onClose}
+                className="px-12 py-4 bg-gray-800 text-white text-xl font-black rounded-full shadow-lg hover:bg-gray-700 transition-all active:scale-95"
+              >
+                關閉商店
+              </button>
             </footer>
           </motion.div>
         </motion.div>
